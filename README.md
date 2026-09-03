@@ -153,6 +153,10 @@ See the [decision record](docs/adr/README.md) for the choices that constrain fut
 
 InferenceMesh is under active development. Version `0.1.0` is the verified gateway foundation; it is not yet the final GPU-backed public demonstration. Issues and pull requests are welcome.
 
+See the [changelog](CHANGELOG.md) for release scope, the
+[contribution guide](CONTRIBUTING.md) for the local quality gate, and the
+[security policy](SECURITY.md) before sharing a vulnerability report.
+
 ## License
 
 [MIT](LICENSE)

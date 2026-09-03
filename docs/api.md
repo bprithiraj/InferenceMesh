@@ -20,11 +20,20 @@ Supported request fields are `model`, `messages`, `stream`, `temperature`, and `
 
 Streaming responses use `text/event-stream`, emit OpenAI-shaped `chat.completion.chunk` objects, and terminate with `data: [DONE]`.
 
+## Model identifiers
+
+`GET /v1/models` is the source of truth for public model IDs. In v0.1,
+`inferencemesh-local` is accepted only by chat completions and
+`inferencemesh-embedding-local` only by embeddings. Unknown or
+task-incompatible IDs fail with `404`; InferenceMesh never silently substitutes
+a different model.
+
 ## Error behavior
 
 - Schema errors return `422`.
 - Configured input or output limit violations return `400`.
 - Missing or invalid credentials return `401`.
+- Unknown or task-incompatible model IDs return `404`.
 - Full or timed-out admission returns `429` with `Retry-After`.
 - No eligible backend returns `503`.
 

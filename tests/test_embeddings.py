@@ -19,3 +19,14 @@ def test_embeddings_are_deterministic_and_normalized(client: TestClient) -> None
         for vector in vectors
     )
     assert first.headers["x-inferencemesh-backend"] == "deterministic-local"
+
+
+def test_embeddings_reject_unknown_and_chat_only_models(client: TestClient) -> None:
+    for model in ("does-not-exist", "inferencemesh-local"):
+        response = client.post(
+            "/v1/embeddings",
+            json={"model": model, "input": "alpha"},
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == f"model '{model}' is not available for embedding"

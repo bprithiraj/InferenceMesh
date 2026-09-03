@@ -31,6 +31,14 @@ from inferencemesh.service import InferenceService
 
 LOGGER = logging.getLogger("inferencemesh")
 
+# These are public API model IDs, rather than backend implementation names.
+# Keeping the allow-list per task prevents a request from being silently routed
+# to a backend that does not actually serve the requested capability.
+SUPPORTED_MODELS: dict[Task, frozenset[str]] = {
+    Task.CHAT: frozenset({"inferencemesh-local"}),
+    Task.EMBEDDING: frozenset({"inferencemesh-embedding-local"}),
+}
+
 
 def _error(status_code: int, message: str, error_type: str) -> JSONResponse:
     return JSONResponse(
@@ -133,11 +141,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     def validate_chat(request: ChatCompletionRequest) -> None:
+        validate_model(request.model, Task.CHAT)
         input_chars = sum(len(message.content) for message in request.messages)
         if input_chars > settings.max_input_chars:
             raise HTTPException(status_code=400, detail="input exceeds configured character limit")
         if request.max_tokens > settings.max_output_tokens:
             raise HTTPException(status_code=400, detail="max_tokens exceeds configured limit")
+
+    def validate_model(model: str, task: Task) -> None:
+        if model not in SUPPORTED_MODELS[task]:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"model '{model}' is not available for {task.value}",
+            )
 
     async def refresh_admission_metrics() -> None:
         snapshot = await admission.snapshot()
@@ -193,6 +209,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         principal: Principal = Depends(authenticator.authenticate),
     ) -> Response:
         texts = [request.input] if isinstance(request.input, str) else request.input
+        validate_model(request.model, Task.EMBEDDING)
         if sum(len(text) for text in texts) > settings.max_input_chars:
             raise HTTPException(status_code=400, detail="input exceeds configured character limit")
         decision = service.route_embedding()

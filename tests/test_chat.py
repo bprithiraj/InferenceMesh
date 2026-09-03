@@ -60,6 +60,20 @@ def test_output_token_limit_is_enforced(client: TestClient) -> None:
     assert response.json()["detail"] == "max_tokens exceeds configured limit"
 
 
+def test_chat_rejects_unknown_and_embedding_only_models(client: TestClient) -> None:
+    for model in ("does-not-exist", "inferencemesh-embedding-local"):
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": "hello"}],
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == f"model '{model}' is not available for chat"
+
+
 def test_unknown_fields_are_rejected(client: TestClient) -> None:
     response = client.post(
         "/v1/chat/completions",
