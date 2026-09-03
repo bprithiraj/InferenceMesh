@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: inferencemesh-gateway
+    runtime: docker
+    plan: free
+    healthCheckPath: /health/ready
+    envVars:
+      - key: INFERENCEMESH_ENVIRONMENT
+        value: public-demo
+      - key: INFERENCEMESH_REQUIRE_API_KEY
+        value: "false"
+      - key: INFERENCEMESH_MAX_CONCURRENT_REQUESTS
+        value: "8"
+      - key: INFERENCEMESH_MAX_CONCURRENT_PER_TENANT
+        value: "2"
+      - key: INFERENCEMESH_MAX_QUEUE_DEPTH
+        value: "16"
+      - key: INFERENCEMESH_MAX_OUTPUT_TOKENS
+        value: "128"

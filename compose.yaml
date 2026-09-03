@@ -1,0 +1,15 @@
+services:
+  gateway:
+    build:
+      context: .
+    environment:
+      INFERENCEMESH_ENVIRONMENT: local-compose
+      INFERENCEMESH_REQUIRE_API_KEY: "false"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
