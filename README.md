@@ -32,9 +32,16 @@ Requires Python 3.12 or newer.
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+python -m pip install -c requirements-lock.txt -e ".[dev]"
 uvicorn inferencemesh.main:app --host 127.0.0.1 --port 8000
 ```
+
+`requirements-lock.txt` contains dependency versions tested in a fresh Windows
+environment, with the editable project excluded. Use it as pip constraints with `-c`.
+For exact reproduction, use Windows and the Python version recorded in its header.
+Linux/macOS may add platform-only dependencies such as `uvloop`, which this snapshot
+does not pin. CI applies these constraints to shared dependencies and runs
+`pip check` before validation.
 
 This command defaults to explicit deterministic `demo` mode.
 To run an actual downloaded CPU model, follow [local serving](docs/local-serving.md).
@@ -98,3 +105,5 @@ See [API behavior](docs/api.md), [roadmap](docs/roadmap.md),
 [changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md) and [security](SECURITY.md).
 
 [MIT license](LICENSE).
+
+See [verified release evidence](VALIDATION.md) for the actual CPU integration results, raw request data and measurement limits.

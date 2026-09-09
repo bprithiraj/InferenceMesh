@@ -19,7 +19,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install -c requirements-lock.txt -e ".[dev]"
+      - name: Check installed dependencies
+        run: python -m pip check
       - name: Ruff lint
         run: ruff check .
       - name: Ruff format
