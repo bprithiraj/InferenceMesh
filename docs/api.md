@@ -1,42 +1,48 @@
 # API behavior
 
-InferenceMesh v0.1 implements a deliberate subset of the OpenAI Chat Completions and Embeddings contracts. Unsupported fields fail validation instead of being silently ignored.
-
-## Endpoints
+v0.2 implements a deliberate subset of the OpenAI Chat Completions and Embeddings
+contracts. Unsupported request fields fail validation.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| `GET` | `/health/live` | Process liveness and version |
-| `GET` | `/health/ready` | Serving-route readiness |
-| `GET` | `/v1/models` | Available logical model identifiers |
-| `POST` | `/v1/chat/completions` | Unary or SSE chat completion |
-| `POST` | `/v1/embeddings` | Deterministic local embeddings |
-| `GET` | `/metrics` | Prometheus scrape endpoint |
-| `GET` | `/demo/metrics/summary` | Low-cardinality public-safe status |
+| GET | /health/live | Process liveness and version |
+| GET | /health/ready | At least one healthy eligible route; capacity saturation is not failure |
+| GET | /v1/models | Configured logical model IDs |
+| POST | /v1/chat/completions | Unary or SSE chat |
+| POST | /v1/embeddings | Embeddings through a configured capability |
+| GET | /metrics | Separate metrics key required; disabled if no key configured |
+| GET | /demo/metrics/summary | Anonymous sanitized capacity summary |
 
-## Chat fields
+Chat fields: `model`, `messages`, `stream`, `temperature`, `max_tokens`,
+and `stream_options.include_usage`. Message roles: system, user, assistant.
 
-Supported request fields are `model`, `messages`, `stream`, `temperature`, and `max_tokens`. Message roles are `system`, `user`, and `assistant`.
+The demo IDs are `inferencemesh-local` for chat and
+`inferencemesh-embedding-local` for embeddings. HTTP mode advertises only configured
+public aliases. Unknown or incompatible model IDs return 404.
 
-Streaming responses use `text/event-stream`, emit OpenAI-shaped `chat.completion.chunk` objects, and terminate with `data: [DONE]`.
+Successful streams emit OpenAI-shaped chunks with stable completion IDs, the public
+model alias, upstream text/finish reason, optional usage and a final `data: [DONE]`.
+Without `include_usage`, usage fields are omitted while content and finish choices
+remain. A post-output upstream failure emits a sanitized SSE error and no `[DONE]`.
+An already-started stream is never retried on another backend.
 
-## Model identifiers
+Unary responses preserve upstream prompt/completion usage and finish reason.
+Deterministic mode uses documented word-count-based synthetic usage; real mode
+does not estimate token counts from words.
 
-`GET /v1/models` is the source of truth for public model IDs. In v0.1,
-`inferencemesh-local` is accepted only by chat completions and
-`inferencemesh-embedding-local` only by embeddings. Unknown or
-task-incompatible IDs fail with `404`; InferenceMesh never silently substitutes
-a different model.
+## Errors and access
 
-## Error behavior
+- 422: schema validation failed.
+- 400: configured input/output size limit exceeded.
+- 401: invalid model API key or metrics key.
+- 404: unsupported model/capability, or disabled metrics endpoint.
+- 429 with Retry-After: bounded admission rejected or request/token budget exhausted.
+- 503: no healthy, nonfailed, unsaturated route remains before response output.
 
-- Schema errors return `422`.
-- Configured input or output limit violations return `400`.
-- Missing or invalid credentials return `401`.
-- Unknown or task-incompatible model IDs return `404`.
-- Full or timed-out admission returns `429` with `Retry-After`.
-- No eligible backend returns `503`.
+API keys use Bearer authorization or X-API-Key. The metrics key is independent.
+Upstream error bodies, credentials and prompt content are not returned in errors.
+The anonymous status endpoint contains only counts/status/policy version.
 
-## Compatibility policy
-
-Generated OpenAPI is treated as a public artifact. Breaking a supported request or response field requires a versioned decision and release note. Future backend adapters cannot leak vLLM- or Triton-specific response shapes through these endpoints.
+The 60-second budgets reserve requested max_tokens rather than actual generated
+tokens. Reservations are not refunded after errors/cancellation. All gateway state
+is process-local; see [local serving limits](local-serving.md).

@@ -11,6 +11,7 @@ from inferencemesh.config import Settings
 def settings() -> Settings:
     return Settings(
         require_api_key=False,
+        metrics_api_key="test-metrics",
         fake_token_delay_ms=0,
         max_concurrent_requests=4,
         max_concurrent_per_tenant=2,

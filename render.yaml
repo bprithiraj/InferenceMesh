@@ -1,3 +1,4 @@
+# Optional deployment definition; no cloud resources are provisioned by this repository.
 services:
   - type: web
     name: inferencemesh-gateway
@@ -7,8 +8,14 @@ services:
     envVars:
       - key: INFERENCEMESH_ENVIRONMENT
         value: public-demo
+      - key: INFERENCEMESH_BACKEND_MODE
+        value: demo
       - key: INFERENCEMESH_REQUIRE_API_KEY
-        value: "false"
+        value: "true"
+      - key: INFERENCEMESH_API_KEY
+        generateValue: true
+      - key: INFERENCEMESH_METRICS_API_KEY
+        generateValue: true
       - key: INFERENCEMESH_MAX_CONCURRENT_REQUESTS
         value: "8"
       - key: INFERENCEMESH_MAX_CONCURRENT_PER_TENANT
@@ -17,3 +24,7 @@ services:
         value: "16"
       - key: INFERENCEMESH_MAX_OUTPUT_TOKENS
         value: "128"
+      - key: INFERENCEMESH_REQUESTS_PER_MINUTE
+        value: "30"
+      - key: INFERENCEMESH_OUTPUT_TOKENS_PER_MINUTE
+        value: "2048"

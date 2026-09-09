@@ -1,34 +1,31 @@
 # Changelog
 
-All notable changes to InferenceMesh are documented here. The project follows
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html) while it is in its
-pre-1.0 development phase.
+## 0.2.0 — local real-serving milestone
 
-## [0.1.0] - Unreleased
+- Added configurable OpenAI-compatible HTTP adapters and model/capability aliases.
+- Preserved stream finish reasons and optional token usage; cleaned up upstream
+  connections and admission on disconnect.
+- Fixed cross-tenant admission starvation by reserving global/tenant capacity atomically.
+- Added measured routing load/latency, circuit recovery and bounded pre-output failover.
+- Protected full metrics using a separate key; added conservative per-process
+  request/output budgets and fail-closed external demo configuration.
+- Added direct-versus-gateway benchmark JSON/CSV reporting and local CPU setup docs.
+- Expanded tests for concurrency, cancellation, truncated streams, circuit recovery,
+  model mapping, budgets and endpoint access.
 
-### Added
+This is a single-process serving milestone. Native Triton, distributed caches/quotas,
+model rollout control and GPU performance evidence remain outside this release.
+A Git tag or running deployment is a separate action.
 
-- OpenAI-compatible chat completions, SSE streaming, embeddings, and model
-  discovery backed by a deterministic local adapter.
-- Explainable eligibility-first routing, bounded global and per-tenant
-  admission, optional API-key authentication, health endpoints, and Prometheus
-  metrics.
-- Docker, Compose, Kubernetes, Render, CI, gRPC-contract, benchmark-method,
-  and local smoke-test assets.
+## 0.1.0 — gateway foundation
 
-### Fixed
+Deterministic chat/embedding adapter, OpenAI-shaped API, bounded admission, static
+eligibility/weighted routing, optional auth, deployment definitions and contributor docs.
+Unknown/task-incompatible model IDs return 404.
 
-- Reject unknown and task-incompatible public model IDs rather than silently
-  routing them to the deterministic backend.
+## Verification policy
 
-### Verification
-
-- A tagged release requires Ruff, strict mypy, pytest, packaging/container
-  checks, and local unary/streaming smoke-test evidence. It is not a GPU
-  benchmark or a publicly exposed model-serving deployment.
-
-## Release policy
-
-Tags are created only after the complete verification suite passes. Each
-release note must distinguish implemented behavior from roadmap work and link
-to any benchmark environment and raw artifacts used for performance claims.
+Run Ruff lint/format, strict mypy and pytest before committing a release.
+Container definitions require an actual container build/run before claiming runtime
+verification. Performance claims must link to actual raw artifacts and environment
+metadata; a mock or CPU probe is not a GPU benchmark.

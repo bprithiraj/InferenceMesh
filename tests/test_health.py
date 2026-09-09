@@ -13,7 +13,7 @@ def test_liveness_and_readiness(client: TestClient) -> None:
 
 
 def test_metrics_are_exposed(client: TestClient) -> None:
-    response = client.get("/metrics")
+    response = client.get("/metrics", headers={"Authorization": "Bearer test-metrics"})
 
     assert response.status_code == 200
     assert "inferencemesh_requests_total" in response.text

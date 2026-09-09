@@ -1,5 +1,8 @@
 # Getting started
 
+For real CPU inference and the HTTP model registry, follow [local serving](local-serving.md).
+The setup below is the deterministic demo profile. Run one gateway worker.
+
 ## Requirements
 
 - Python 3.12+
@@ -29,6 +32,10 @@ Copy `.env.example` to `.env`. Every setting uses the `INFERENCEMESH_` prefix.
 
 | Setting | Default | Purpose |
 | --- | ---: | --- |
+| `BACKEND_MODE` | `demo` | Explicit deterministic demo or configured HTTP engines |
+| `METRICS_API_KEY` | empty | Separate scrape key; empty disables /metrics |
+| `REQUESTS_PER_MINUTE` | `60` | Per-process sliding-window request budget |
+| `OUTPUT_TOKENS_PER_MINUTE` | `8192` | Reserve requested maximum output tokens |
 | `REQUIRE_API_KEY` | `false` | Require bearer or `x-api-key` authentication |
 | `API_KEY` | `local-dev-key` | Local key when authentication is enabled |
 | `MAX_CONCURRENT_REQUESTS` | `32` | Global active inference bound |

@@ -1,162 +1,100 @@
 # InferenceMesh
 
 [![CI](https://github.com/bprithiraj/InferenceMesh/actions/workflows/ci.yml/badge.svg)](https://github.com/bprithiraj/InferenceMesh/actions/workflows/ci.yml)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-InferenceMesh is an SLO-aware, OpenAI-compatible inference control plane. It explores a practical systems problem: when models and serving engines have different latency, quality, cost, capacity, and health characteristics, how should a gateway select the safest eligible route while remaining stable under load?
+A small inference gateway that protects model-serving capacity and explains its
+routing decisions. v0.2 runs real OpenAI-compatible HTTP backends, including a local
+Ollama profile and a vLLM-compatible profile. It remains a single-process personal
+systems project with explicit boundaries.
 
-This repository is being built as a production-shaped personal project. Each release must run, be testable, and clearly separate implemented behavior from the roadmap.
+## Implemented in v0.2
 
-## What works in v0.1
+- Unary chat, SSE streaming, embedding requests and public model discovery.
+- Configurable public aliases mapped to actual upstream model IDs and capabilities.
+- HTTP connection cleanup on client disconnect; upstream finish reasons and token usage preserved.
+- Bounded global and per-tenant admission with FIFO fairness among eligible tenants.
+  A saturated tenant cannot reserve another tenant's free slot.
+- Health probes, measured latency/load/error scoring, capacity limits, circuit breaking
+  and single half-open recovery probes.
+- Alternate backend attempts before streamed content begins; no midstream switching.
+- API-key mode, per-process request/output budgets and separately protected metrics.
+- Deterministic demo mode, meaningful failure/cancellation tests, CI/container definitions.
+- Direct-backend versus gateway benchmark runner with raw CSV and JSON metadata.
 
-- OpenAI-compatible `POST /v1/chat/completions`, including SSE token streaming.
-- OpenAI-compatible `POST /v1/embeddings` and `GET /v1/models`.
-- Hard backend eligibility filters followed by deterministic weighted routing.
-- Route-decision headers explaining the selected backend and policy version.
-- Bounded global concurrency, per-tenant concurrency, queue depth, and queue wait.
-- Optional bearer/API-key authentication and request/output limits.
-- Request IDs, health/readiness checks, Prometheus metrics, and a sanitized demo summary.
-- Deterministic local backend for zero-cost development, CI, contract tests, and failure testing.
-- Docker, Docker Compose, Kubernetes, and Render deployment definitions.
-- Unit, contract, streaming, authentication, routing, and concurrency tests.
-- A versioned gRPC contract for the next transport milestone.
+The HTTP adapter is real implementation. A CPU Ollama run validates that protocol
+path; it is not evidence of vLLM GPU throughput. No cloud resources are created by
+running the local setup.
 
-The deterministic backend is intentional: it proves the gateway behavior without pretending a laptop is a GPU platform. Real vLLM text generation, Triton embeddings, MLflow rollout controls, Redis caching, Kafka batches, and the public GPU deployment are tracked in the [roadmap](docs/roadmap.md).
-
-## Architecture
-
-```mermaid
-flowchart LR
-    Client["OpenAI client"] --> API["FastAPI gateway"]
-    API --> Auth["Authentication and limits"]
-    Auth --> Admission["Bounded admission"]
-    Admission --> Router["Eligibility and weighted routing"]
-    Router --> Adapter["Backend adapter contract"]
-    Adapter --> Local["Deterministic local backend"]
-    Adapter -. next .-> VLLM["vLLM"]
-    Adapter -. next .-> Triton["Triton"]
-    API --> Metrics["Prometheus metrics"]
-```
-
-The synchronous request path deliberately excludes Kafka and MLflow. Control-plane failures must not prevent the last validated serving configuration from handling online traffic. Read the [full architecture](docs/architecture.md) and [implementation plan](docs/development-plan.md).
-
-## Quick start
+## Run locally
 
 Requires Python 3.12 or newer.
 
 ```powershell
-git clone https://github.com/bprithiraj/InferenceMesh.git
-cd InferenceMesh
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
-uvicorn inferencemesh.main:app --reload
+uvicorn inferencemesh.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open:
+This command defaults to explicit deterministic `demo` mode.
+To run an actual downloaded CPU model, follow [local serving](docs/local-serving.md).
+No paid provider or API credits are required for that path.
 
-- API documentation: `http://127.0.0.1:8000/docs`
+- API docs: `http://127.0.0.1:8000/docs`
+- Model IDs: `http://127.0.0.1:8000/v1/models`
 - Readiness: `http://127.0.0.1:8000/health/ready`
-- Metrics: `http://127.0.0.1:8000/metrics`
-- Sanitized demo status: `http://127.0.0.1:8000/demo/metrics/summary`
+- Sanitized status: `http://127.0.0.1:8000/demo/metrics/summary`
 
-Run the smoke test in another terminal:
+Full `/metrics` is disabled until a separate metrics key is configured.
 
-```powershell
-.\.venv\Scripts\python.exe scripts\smoke_test.py
+## Request path
+
+```mermaid
+flowchart LR
+    Client --> Auth[API key and request budgets]
+    Auth --> Queue[Atomic global and tenant admission]
+    Queue --> Router[Model capability, health, circuit and capacity]
+    Router --> Score[Measured latency, load and error score]
+    Score --> HTTP[OpenAI-compatible HTTP adapter]
+    HTTP --> Ollama[Local Ollama model]
+    HTTP --> VLLM[Configured vLLM server]
+    Router -. demo profile .-> Fake[Deterministic test backend]
 ```
 
-## Try the API
+The online path has no Kafka, Redis, MLflow or database dependency. Backend clients
+are pooled and closed on shutdown. Each request tries an eligible backend at most
+once. If a stream fails after output begins, the client receives a sanitized error
+event without a false success terminator.
 
-Unary chat completion:
-
-```powershell
-$body = @{
-  model = "inferencemesh-local"
-  messages = @(@{ role = "user"; content = "Why should an inference queue be bounded?" })
-  temperature = 0
-  max_tokens = 96
-} | ConvertTo-Json -Depth 5
-
-Invoke-RestMethod -Uri http://127.0.0.1:8000/v1/chat/completions `
-  -Method Post -ContentType application/json -Body $body
-```
-
-Streaming with curl:
-
-```bash
-curl -N http://127.0.0.1:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"inferencemesh-local","messages":[{"role":"user","content":"Stream a routing decision"}],"stream":true}'
-```
-
-The response includes:
-
-- `x-inferencemesh-request-id`
-- `x-inferencemesh-backend`
-- `x-inferencemesh-model-version`
-- `x-inferencemesh-policy-version`
-- `x-inferencemesh-route-reason`
-
-## Verify
+## Verify and compare
 
 ```powershell
 ruff check .
 ruff format --check .
 mypy src
 pytest
+python scripts/smoke_test.py
 ```
 
-## Run with containers
+The smoke script uses demo model IDs. Use the examples in
+[local serving](docs/local-serving.md) for real model aliases.
 
-```bash
-docker compose up --build
-```
+Run [the benchmark](benchmarks/README.md) to produce inspectable source/hardware/model
+metadata, request rows, TTFT, latency quantiles, throughput and rejection counts.
+Performance claims require actual saved results and enough repeated samples.
 
-The image runs as a non-root user with a read-only filesystem in Compose. See [getting started](docs/getting-started.md) for configuration and [API behavior](docs/api.md) for supported compatibility details.
+## Deliberate limits
 
-## Deploy
+- One gateway worker; admission, circuit state and budgets are process-local.
+- A configured API key identifies one tenant; this is not a customer account system.
+- HTTP embeddings are supported; a native Triton gRPC adapter is not implemented.
+- The protobuf schema is a contract only; no running gRPC gateway is claimed.
+- Distributed quotas, exact/semantic caches, MLflow rollout controls, Kafka batches
+  and an unrestricted public GPU demo remain future work.
+- Model availability probes do not establish model quality or an end-to-end SLO.
+- Docker/Render/Kubernetes definitions are deployment assets, not evidence of live deployment.
 
-The repository includes three deployment paths:
+See [API behavior](docs/api.md), [roadmap](docs/roadmap.md),
+[changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md) and [security](SECURITY.md).
 
-- `render.yaml` for an inexpensive CPU demonstration of the gateway contract.
-- `Dockerfile` for any container platform.
-- `deploy/kubernetes/` for the production-shaped gateway deployment.
-
-The CPU demo is not presented as an LLM benchmark. Performance claims will be published only after the reference GPU environment, models, workload, and raw result artifacts are pinned.
-
-## Repository map
-
-```text
-src/inferencemesh/     gateway, domain, routing, admission, adapters, metrics
-tests/                 unit and API contract tests
-proto/                 versioned gRPC API contract
-deploy/kubernetes/     deployable gateway manifests
-benchmarks/            reproducible benchmark runner and methodology
-scripts/               smoke tests
-docs/                  architecture, API, decisions, roadmap, implementation plan
-```
-
-## Engineering decisions
-
-- Filter for capability, health, and circuit state before scoring performance.
-- Reject overload predictably instead of allowing unbounded memory growth.
-- Never change backends after the first streamed token.
-- Keep backend-specific shapes behind adapters.
-- Make route decisions observable without logging prompt content.
-- Publish benchmark context and raw artifacts with every resume metric.
-
-See the [decision record](docs/adr/README.md) for the choices that constrain future milestones.
-
-## Project status
-
-InferenceMesh is under active development. Version `0.1.0` is the verified gateway foundation; it is not yet the final GPU-backed public demonstration. Issues and pull requests are welcome.
-
-See the [changelog](CHANGELOG.md) for release scope, the
-[contribution guide](CONTRIBUTING.md) for the local quality gate, and the
-[security policy](SECURITY.md) before sharing a vulnerability report.
-
-## License
-
-[MIT](LICENSE)
+[MIT license](LICENSE).

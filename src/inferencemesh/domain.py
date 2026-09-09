@@ -18,7 +18,12 @@ class ChatMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: Literal["system", "user", "assistant"]
-    content: str = Field(min_length=1)
+    content: str = ""
+
+
+class StreamOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    include_usage: bool = False
 
 
 class ChatCompletionRequest(BaseModel):
@@ -29,6 +34,7 @@ class ChatCompletionRequest(BaseModel):
     model: str
     messages: list[ChatMessage] = Field(min_length=1)
     stream: bool = False
+    stream_options: StreamOptions | None = None
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     max_tokens: int = Field(default=128, ge=1)
 
@@ -42,7 +48,7 @@ class CompletionUsage(BaseModel):
 class ChatChoice(BaseModel):
     index: int = 0
     message: ChatMessage
-    finish_reason: Literal["stop", "length"] = "stop"
+    finish_reason: str = "stop"
 
 
 class ChatCompletionResponse(BaseModel):

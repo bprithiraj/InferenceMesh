@@ -1,4 +1,4 @@
-"""Bounded admission control for protecting backend capacity."""
+"""Atomic, bounded admission with FIFO fairness among eligible tenants."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 
 class AdmissionRejected(RuntimeError):
-    """Raised when a request cannot enter the bounded execution pool."""
+    """The bounded queue is full or its wait deadline expired."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,24 +22,28 @@ class AdmissionSnapshot:
 
 
 class AdmissionLease:
-    """A capacity reservation that is safe to release exactly once."""
-
-    def __init__(self, controller: AdmissionController, tenant: asyncio.Semaphore) -> None:
+    def __init__(self, controller: AdmissionController, tenant: str) -> None:
         self._controller = controller
         self._tenant = tenant
         self._released = False
 
     async def release(self) -> None:
-        if self._released:
-            return
-        self._released = True
-        self._tenant.release()
-        self._controller._global.release()
-        await self._controller._leave_active()
+        await asyncio.shield(self._release())
+
+    async def _release(self) -> None:
+        async with self._controller._condition:
+            if self._released:
+                return
+            self._released = True
+            self._controller._active -= 1
+            self._controller._tenants[self._tenant] -= 1
+            if not self._controller._tenants[self._tenant]:
+                del self._controller._tenants[self._tenant]
+            self._controller._condition.notify_all()
 
 
 class AdmissionController:
-    """Bound active and waiting work globally and per tenant."""
+    """Reserve global and tenant capacity together, never while waiting."""
 
     def __init__(
         self,
@@ -49,74 +53,54 @@ class AdmissionController:
         max_queue_depth: int,
         queue_wait_seconds: float,
     ) -> None:
-        self._global = asyncio.Semaphore(max_concurrent)
-        self._tenant_limit = max_concurrent_per_tenant
-        self._tenants: defaultdict[str, asyncio.Semaphore] = defaultdict(self._new_tenant_semaphore)
         self._max_concurrent = max_concurrent
+        self._tenant_limit = max_concurrent_per_tenant
         self._max_queue_depth = max_queue_depth
         self._queue_wait_seconds = queue_wait_seconds
-        self._state_lock = asyncio.Lock()
+        self._condition = asyncio.Condition()
         self._active = 0
-        self._waiting = 0
-
-    def _new_tenant_semaphore(self) -> asyncio.Semaphore:
-        return asyncio.Semaphore(self._tenant_limit)
+        self._tenants: defaultdict[str, int] = defaultdict(int)
+        self._queue: list[tuple[object, str]] = []
 
     async def snapshot(self) -> AdmissionSnapshot:
-        async with self._state_lock:
+        async with self._condition:
             return AdmissionSnapshot(
-                active=self._active,
-                waiting=self._waiting,
-                max_active=self._max_concurrent,
-                max_waiting=self._max_queue_depth,
+                self._active, len(self._queue), self._max_concurrent, self._max_queue_depth
             )
 
-    async def _enter_queue(self) -> None:
-        async with self._state_lock:
-            if self._waiting >= self._max_queue_depth:
-                raise AdmissionRejected("inference queue is full")
-            self._waiting += 1
+    def _eligible(self, tenant: str) -> bool:
+        return (
+            self._active < self._max_concurrent
+            and self._tenants.get(tenant, 0) < self._tenant_limit
+        )
 
-    async def _leave_queue(self, *, admitted: bool) -> None:
-        async with self._state_lock:
-            self._waiting -= 1
-            if admitted:
-                self._active += 1
-
-    async def _leave_active(self) -> None:
-        async with self._state_lock:
-            self._active -= 1
+    def _first_eligible(self) -> object | None:
+        return next((ticket for ticket, tenant in self._queue if self._eligible(tenant)), None)
 
     async def acquire(self, tenant_id: str) -> AdmissionLease:
-        """Acquire capacity before transport response headers are sent."""
-
-        await self._enter_queue()
-        global_acquired = False
-        tenant_acquired = False
-        admitted = False
-        tenant = self._tenants[tenant_id]
-
-        try:
-            async with asyncio.timeout(self._queue_wait_seconds):
-                await self._global.acquire()
-                global_acquired = True
-                await tenant.acquire()
-                tenant_acquired = True
-            admitted = True
-            return AdmissionLease(self, tenant)
-        except TimeoutError as exc:
-            raise AdmissionRejected("inference capacity wait timed out") from exc
-        finally:
-            await self._leave_queue(admitted=admitted)
-            if not admitted:
-                if tenant_acquired:
-                    tenant.release()
-                if global_acquired:
-                    self._global.release()
+        ticket = object()
+        async with self._condition:
+            if self._eligible(tenant_id) and self._first_eligible() is None:
+                self._active += 1
+                self._tenants[tenant_id] += 1
+                return AdmissionLease(self, tenant_id)
+            if len(self._queue) >= self._max_queue_depth:
+                raise AdmissionRejected("inference queue is full")
+            self._queue.append((ticket, tenant_id))
+            try:
+                async with asyncio.timeout(self._queue_wait_seconds):
+                    await self._condition.wait_for(lambda: self._first_eligible() is ticket)
+                self._active += 1
+                self._tenants[tenant_id] += 1
+                return AdmissionLease(self, tenant_id)
+            except TimeoutError as exc:
+                raise AdmissionRejected("inference capacity wait timed out") from exc
+            finally:
+                self._queue.remove((ticket, tenant_id))
+                self._condition.notify_all()
 
     @asynccontextmanager
     async def admit(self, tenant_id: str) -> AsyncIterator[None]:
-        """Reserve bounded global and tenant capacity for one request."""
         lease = await self.acquire(tenant_id)
         try:
             yield

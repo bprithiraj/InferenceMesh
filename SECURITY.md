@@ -4,7 +4,7 @@
 
 InferenceMesh is a pre-1.0 personal project and does not provide an uptime or
 security-response SLA. Security fixes are considered for the latest released
-`0.1.x` version only.
+`0.2.x` version only.
 
 ## Reporting a vulnerability
 

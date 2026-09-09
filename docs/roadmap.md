@@ -1,51 +1,32 @@
-# Roadmap
+# Roadmap and scope
 
-## v0.1 - Gateway foundation
+## v0.1 — completed gateway foundation
 
-- [x] OpenAI-compatible unary chat and SSE streaming
-- [x] Embeddings contract
-- [x] Deterministic backend adapter
-- [x] Bounded global, tenant, and queue admission
-- [x] Explainable eligibility and weighted routing
-- [x] API-key mode, limits, request IDs, and metrics
-- [x] Tests, containers, CI, Kubernetes manifests, and gRPC contract
+OpenAI-shaped unary/SSE and embeddings contracts, deterministic adapter,
+bounded admission, weighted routing, API-key mode, health/metrics, tests and
+deployment definitions.
 
-## v0.2 - Real serving engines
+## v0.2 — implemented real HTTP serving milestone
 
-- [ ] vLLM adapter with cancellation, health, usage, and metrics
-- [ ] Triton gRPC adapter for embeddings or reranking
-- [ ] Backend circuit breaker and half-open probes
-- [ ] Direct-backend versus gateway benchmark harness
-- [ ] GPU Compose profile and pinned public model revisions
+- [x] Configurable model/capability registry and OpenAI-compatible HTTP adapter.
+- [x] Local Ollama and vLLM configuration examples.
+- [x] Stream usage/finish preservation and upstream cleanup on disconnect.
+- [x] Fair atomic global/tenant admission with cancellation/timeout regression tests.
+- [x] Measured load/latency, health probes and recoverable circuit breakers.
+- [x] Bounded failover before output; no midstream switching.
+- [x] Protected full metrics and per-process request/output budgets.
+- [x] Direct-versus-gateway benchmark tool with raw CSV/JSON artifacts.
+- [ ] Native vLLM GPU execution and reproducible GPU benchmark evidence.
+- [ ] Native Triton gRPC embeddings/reranking adapter.
 
-## v0.3 - Multi-tenant caching
+## Later milestones, intentionally not required for the local v0.2 project
 
-- [ ] Salted tenant API-key store and atomic Redis quotas
-- [ ] Exact cache with tenant/model/policy isolation
-- [ ] Triton-generated embeddings and Redis semantic cache
-- [ ] Hard-negative cache evaluation and false-hit gate
+- Distributed tenant authentication and atomic shared quotas.
+- Exact/semantic caches with tenant/model/policy isolation and false-hit evaluation.
+- Durable route snapshots, model registry integration, shadow/canary rollout and rollback.
+- Batch jobs, outbox/dead-letter flows and production telemetry.
+- Authenticated guest-session UI and independently verified public deployment.
 
-## v0.4 - Safe model rollout
-
-- [ ] Database-backed MLflow registry
-- [ ] Immutable gateway route snapshots
-- [ ] Champion/candidate aliases
-- [ ] Shadow evaluation and deterministic canaries
-- [ ] Automated rollback and audit evidence
-
-## v0.5 - Batch and operations
-
-- [ ] Kafka batch jobs, transactional outbox, and dead-letter path
-- [ ] OpenTelemetry traces and production dashboards
-- [ ] Helm deployment for CPU and GPU node pools
-- [ ] Failure injection and reproducible benchmark release
-
-## v1.0 - Public recruiter demonstration
-
-- [ ] Restricted guest-session flow
-- [ ] Live streaming and route explanation
-- [ ] Safe canary-failure and rollback scenario
-- [ ] Published benchmark report and raw artifacts
-- [ ] Portfolio links, architecture video, and anonymous access verification
-
-Ray Serve remains deferred until a measured multi-stage model pipeline requires Python-native composition or independent stage autoscaling.
+These are future work, not shipped features. Add infrastructure only when a measured
+workload needs it. Ray Serve remains deferred unless independent pipeline-stage
+composition or scaling becomes necessary.

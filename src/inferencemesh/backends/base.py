@@ -1,12 +1,16 @@
-"""Backend adapter protocol."""
+"""Transport-neutral backend responses and explicit upstream failures."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from inferencemesh.domain import ChatCompletionRequest
+
+
+class BackendUnavailable(RuntimeError):
+    """Upstream failed; its response body and credentials must stay private."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,13 +22,17 @@ class BackendCompletion:
     system_fingerprint: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class BackendEmbedding:
+    vectors: list[list[float]]
+    prompt_tokens: int
+
+
 class BackendAdapter(Protocol):
     name: str
 
     async def complete(self, request: ChatCompletionRequest) -> BackendCompletion: ...
-
-    def stream(self, request: ChatCompletionRequest) -> AsyncIterator[str]: ...
-
-    async def embed(self, texts: list[str]) -> list[list[float]]: ...
-
+    def stream(self, request: ChatCompletionRequest) -> AsyncGenerator[dict[str, Any], None]: ...
+    async def embed(self, texts: list[str]) -> BackendEmbedding: ...
     async def health(self) -> bool: ...
+    async def aclose(self) -> None: ...

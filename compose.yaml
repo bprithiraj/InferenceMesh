@@ -4,9 +4,10 @@ services:
       context: .
     environment:
       INFERENCEMESH_ENVIRONMENT: local-compose
+      INFERENCEMESH_BACKEND_MODE: demo
       INFERENCEMESH_REQUIRE_API_KEY: "false"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     restart: unless-stopped
     read_only: true
     tmpfs:

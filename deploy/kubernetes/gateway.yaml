@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: inferencemesh
     app.kubernetes.io/component: gateway
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: inferencemesh
@@ -25,14 +25,16 @@ spec:
           type: RuntimeDefault
       containers:
         - name: gateway
-          image: ghcr.io/bprithiraj/inferencemesh:0.1.0
-          imagePullPolicy: IfNotPresent
+          image: inferencemesh:0.2.0
+          imagePullPolicy: Never
           ports:
             - name: http
               containerPort: 8000
           env:
             - name: INFERENCEMESH_ENVIRONMENT
-              value: kubernetes
+              value: public-demo
+            - name: INFERENCEMESH_BACKEND_MODE
+              value: demo
             - name: INFERENCEMESH_REQUIRE_API_KEY
               value: "true"
             - name: INFERENCEMESH_API_KEY
@@ -40,6 +42,11 @@ spec:
                 secretKeyRef:
                   name: inferencemesh-gateway
                   key: api-key
+            - name: INFERENCEMESH_METRICS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: inferencemesh-gateway
+                  key: metrics-key
           resources:
             requests:
               cpu: 100m
@@ -65,9 +72,7 @@ spec:
               drop: ["ALL"]
             readOnlyRootFilesystem: true
   strategy:
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+    type: Recreate
 ---
 apiVersion: v1
 kind: Service
@@ -89,7 +94,7 @@ metadata:
   name: inferencemesh-gateway
   namespace: inferencemesh
 spec:
-  minAvailable: 1
+  minAvailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: inferencemesh

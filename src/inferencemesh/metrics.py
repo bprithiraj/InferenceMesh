@@ -9,12 +9,12 @@ REQUESTS = Counter(
 )
 REQUEST_LATENCY = Histogram(
     "inferencemesh_request_duration_seconds",
-    "End-to-end inference request duration.",
+    "Backend attempt duration, excluding gateway admission wait.",
     ("task", "backend"),
 )
 TIME_TO_FIRST_TOKEN = Histogram(
     "inferencemesh_time_to_first_token_seconds",
-    "Time between request admission and the first streamed token.",
+    "Time between backend selection and first content, excluding gateway admission wait.",
     ("backend",),
 )
 ADMISSION_ACTIVE = Gauge(
